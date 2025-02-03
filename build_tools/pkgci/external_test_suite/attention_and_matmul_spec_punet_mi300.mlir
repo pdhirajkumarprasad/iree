@@ -100,7 +100,23 @@ transform.named_sequence @match_attention_f8(%attention: !transform.any_op {tran
 //===----------------------------------------------------------------------===//
 // Matmul tuning
 //===----------------------------------------------------------------------===//
-
+//Tuning for sdxl
+transform.named_sequence @match_contraction_8192x10240x1280_i8xi8xi32(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
+    %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
+    ^bb0(%arg1: tensor<8192x1280xi8>, %arg2: tensor<10240x1280xi8>, %arg3: tensor<8192x10240xi32>):
+      %1 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2) -> (d0, d2)>, affine_map<(d0, d1, d2) -> (d1, d2)>, affine_map<(d0, d1, d2) -> (d0, d1)>], iterator_types = ["parallel", "parallel", "reduction"]} ins(%arg1, %arg2 : tensor<8192x1280xi8>, tensor<10240x1280xi8>) outs(%arg3 : tensor<8192x10240xi32>) {
+      ^bb0(%in: i8, %in_0: i8, %out: i32):
+        %2 = arith.extsi %in : i8 to i32
+        %3 = arith.extsi %in_0 : i8 to i32
+        %4 = arith.muli %2, %3 : i32
+        %5 = arith.addi %out, %4 : i32
+        linalg.yield %5 : i32
+      } -> tensor<8192x10240xi32>
+    } : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
+    %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, promote_operands = [0, 1], reduction = [0, 0, 2], subgroup = [4, 8, 0], subgroup_m_count = 2 : i64, subgroup_n_count = 2 : i64, workgroup = [128, 256, 0]}>, translation_info = <pipeline = LLVMGPUTileAndFuse workgroup_size = [256, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
+    transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
+  }
+//End of sdxl tuning
 transform.named_sequence @match_mmt_i8_i8_i32(%root: !transform.any_op {transform.readonly}) -> (!transform.any_op) {
   transform.match.operation_name %root ["linalg.generic"] : !transform.any_op
   // transform.print %root {name = "Generic"} : !transform.any_op
@@ -568,6 +584,9 @@ transform.named_sequence @match_matmul_like_Bx20x64x64x2048_transposev_i8xi8xi32
         , @match_broadcast_rhs_mmt_Bx4960x640x640 -> @apply_op_config
         //, @match_broadcast_rhs_mmt_Bx64x640x2480 -> @apply_op_config
 
+        //sdxl tuning
+        @match_contraction_8192x10240x1280_i8xi8xi32 -> @apply_op_config
+        //tuning end
 
         // Contration.
         , @match_matmul_like_Bx20x1024x64x1280_i8xi8xi32 -> @apply_op_config
