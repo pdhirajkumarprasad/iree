@@ -102,7 +102,6 @@ transform.named_sequence @match_attention_f8(%attention: !transform.any_op {tran
 //===----------------------------------------------------------------------===//
 
 //mlperf bs=18, cpd=1 start
-
 transform.named_sequence @match_contraction_36864x10240x1280_i8xi8xi32(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
     %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
     ^bb0(%arg1: tensor<36864x1280xi8>, %arg2: tensor<10240x1280xi8>, %arg3: tensor<36864x10240xi32>):
@@ -115,9 +114,10 @@ transform.named_sequence @match_contraction_36864x10240x1280_i8xi8xi32(%arg0: !t
         linalg.yield %5 : i32
       } -> tensor<36864x10240xi32>
     } : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
-    %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, promote_operands = [0, 1], reduction = [0, 0, 64], subgroup_m_count = 1 : i64, subgroup_n_count = 4 : i64, workgroup = [128, 320, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
+    %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, promote_operands = [0, 1], reduction = [0, 0, 64], subgroup_m_count = 2 : i64, subgroup_n_count = 4 : i64, workgroup = [128, 256, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [512, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
     transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
   }
+
 //mlperf bs=18, cpd=1 end
 transform.named_sequence @match_mmt_i8_i8_i32(%root: !transform.any_op {transform.readonly}) -> (!transform.any_op) {
   transform.match.operation_name %root ["linalg.generic"] : !transform.any_op
