@@ -178,7 +178,21 @@ transform.named_sequence @match_contraction_36864x10240x1280_i8xi8xi32(%arg0: !t
     %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, promote_operands = [0, 1], reduction = [0, 0, 0, 64], subgroup_m_count = 2 : i64, subgroup_n_count = 4 : i64, workgroup = [1, 256, 128, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [512, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
     transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
   }
-
+transform.named_sequence @match_contraction_36x20x1024_i8xi8xi32(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
+    %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
+    ^bb0(%arg1: tensor<36x1024x1280xi8>, %arg2: tensor<20x64x1280xi8>, %arg3: tensor<36x20x1024x64xi32>):
+      %1 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2, d3, d4) -> (d0, d2, d4)>, affine_map<(d0, d1, d2, d3, d4) -> (d1, d3, d4)>, affine_map<(d0, d1, d2, d3, d4) -> (d0, d1, d2, d3)>], iterator_types = ["parallel", "parallel", "parallel", "parallel", "reduction"]} ins(%arg1, %arg2 : tensor<36x1024x1280xi8>, tensor<20x64x1280xi8>) outs(%arg3 : tensor<36x20x1024x64xi32>) {
+      ^bb0(%in: i8, %in_0: i8, %out: i32):
+        %2 = arith.extsi %in : i8 to i32
+        %3 = arith.extsi %in_0 : i8 to i32
+        %4 = arith.muli %2, %3 : i32 
+        %5 = arith.addi %out, %4 : i32 
+        linalg.yield %5 : i32
+      } -> tensor<36x20x1024x64xi32> 
+    } : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
+    %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_I32_16x16x32_I8>, promote_operands = [0, 1], reduction = [0, 0, 0, 0, 64], subgroup_m_count = 2 : i64, subgroup_n_count = 4 : i64, workgroup = [1, 4, 128, 64, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [512, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
+    transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
+  }
 //conv
 transform.named_sequence @match_conv_2d_nhwc_hwcf_36x64x64_1280_3x3x1280_(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
     %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
@@ -663,6 +677,7 @@ transform.named_sequence @match_matmul_like_Bx20x64x64x2048_transposev_i8xi8xi32
         , @match_mmt_2048x1280x1280 -> @apply_op_config
         , @match_mmt_8192x640x640 -> @apply_op_config
         , @match_mmt_8192x5120x640 -> @apply_op_config
+        ,@match_contraction_36x20x1024_i8xi8xi32 -> @apply_op_config
         , @match_conv_2d_nhwc_hwcf_36x64x64_1280_3x3x1280_ -> @apply_op_config
         , @match_conv_2d_nhwc_hwcf_36x32x32_1280_3x3x1280_ -> @apply_op_config
         , @match_conv_2d_nhwc_hwcf_36x32x32_1280_3x3x2560_ -> @apply_op_config
