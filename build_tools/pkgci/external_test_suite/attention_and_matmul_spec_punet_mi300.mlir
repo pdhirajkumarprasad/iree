@@ -251,6 +251,37 @@ transform.named_sequence @match_conv_2d_nhwc_hwcf_18x256x256_512_3x3x512_(%arg0:
     %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, promote_operands = [0, 1], reduction = [0, 0, 0, 0, 1, 1, 32], subgroup_m_count = 1 : i64, subgroup_n_count = 4 : i64, workgroup = [1, 8, 16, 256, 0, 0, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [256, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
     transform.yield %arg0, %0 : !transform.any_op, !transform.any_param 
   }
+transform.named_sequence @match_conv_2d_nhwc_hwcf_18x128x128_512_3x3x512_(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
+    %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
+    ^bb0(%arg1: tensor<18x130x130x512xf16>, %arg2: tensor<3x3x512x512xf16>, %arg3: tensor<18x128x128x512xf32>):
+      %1 = linalg.conv_2d_nhwc_hwcf {dilations = dense<1> : vector<2xi64>, strides = dense<1> : vector<2xi64>} ins(%arg1, %arg2 : tensor<18x130x130x512xf16>, tensor<3x3x512x512xf16>) outs(%arg3 : tensor<18x128x128x512xf32>) -> tensor<18x128x128x512xf32>
+    } : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
+    %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, promote_operands = [0, 1], reduction = [0, 0, 0, 0, 1, 1, 32], subgroup_m_count = 2 : i64, subgroup_n_count = 4 : i64, workgroup = [1, 2, 64, 256, 0, 0, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [512, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
+    transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
+  }
+transform.named_sequence @match_conv_2d_nhwc_hwcf_18x256x256_512_3x3x512_(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
+    %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
+    ^bb0(%arg1: tensor<18x258x258x512xf16>, %arg2: tensor<3x3x512x512xf16>, %arg3: tensor<18x256x256x512xf32>):
+      %1 = linalg.conv_2d_nhwc_hwcf {dilations = dense<1> : vector<2xi64>, strides = dense<1> : vector<2xi64>} ins(%arg1, %arg2 : tensor<18x258x258x512xf16>, tensor<3x3x512x512xf16>) outs(%arg3 : tensor<18x256x256x512xf32>) -> tensor<18x256x256x512xf32>
+    } : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
+    %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, promote_operands = [0, 1], reduction = [0, 0, 0, 0, 1, 1, 32], subgroup_m_count = 2 : i64, subgroup_n_count = 4 : i64, workgroup = [2, 2, 64, 256, 0, 0, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [512, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
+    transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
+  }
+transform.named_sequence @match_contraction_18x16384x16384_f16xf16xf32(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
+    %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
+    ^bb0(%arg1: tensor<18x16384x512xf16>, %arg2: tensor<18x512x16384xf16>, %arg3: tensor<18x16384x16384xf32>):
+      %1 = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2, d3) -> (d0, d1, d3)>, affine_map<(d0, d1, d2, d3) -> (d0, d3, d2)>, affine_map<(d0, d1, d2, d3) -> (d0, d1, d2)>], iterator_types = ["parallel", "parallel", "parallel", "reduction"]} ins(%arg1, %arg2 : tensor<18x16384x512xf16>, tensor<18x512x16384xf16>) outs(%arg3 : tensor<18x16384x16384xf32>) {
+      ^bb0(%in: f16, %in_0: f16, %out: f32):
+        %2 = arith.extf %in : f16 to f32
+        %3 = arith.extf %in_0 : f16 to f32
+        %4 = arith.mulf %2, %3 : f32
+        %5 = arith.addf %out, %4 : f32 
+        linalg.yield %5 : f32
+      } -> tensor<18x16384x16384xf32>
+    } : (!transform.any_op) -> (!transform.any_value, !transform.any_value)
+    %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, promote_operands = [0, 1], reduction = [0, 0, 0, 32], subgroup_m_count = 2 : i64, subgroup_n_count = 4 : i64, workgroup = [1, 128, 256, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [512, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
+    transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
+  }
 //conv
 transform.named_sequence @match_conv_2d_nhwc_hwcf_36x64x64_1280_3x3x1280_(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
     %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
@@ -728,11 +759,13 @@ transform.named_sequence @match_matmul_like_Bx20x64x64x2048_transposev_i8xi8xi32
         ,@match_contraction_147456x5120x640_i8xi8xi32 -> @apply_op_config
         ,@match_contraction_36x1280x1024_i8xi8xi32 -> @apply_op_config   
         
-        //mlperf bs=18, cpd=1 end
         // Matmul.
         ,@match_conv_2d_nhwc_hwcf_18x512x512_512_3x3x512_ -> @apply_op_config
         ,@match_conv_2d_nhwc_hwcf_18x1024x1024_256_3x3x256_ -> @apply_op_config
         ,@match_conv_2d_nhwc_hwcf_18x256x256_512_3x3x512_ -> @apply_op_config 
+        ,@match_conv_2d_nhwc_hwcf_18x128x128_512_3x3x512_ -> @apply_op_config
+        ,@match_conv_2d_nhwc_hwcf_18x256x256_512_3x3x512_ -> @apply_op_config
+        ,@match_contraction_18x16384x16384_f16xf16xf32 -> @apply_op_config
 
         , @match_mmt_2048x10240x1280 -> @apply_op_config
         , @match_mmt_2048x1280x5120 -> @apply_op_config
@@ -749,6 +782,8 @@ transform.named_sequence @match_matmul_like_Bx20x64x64x2048_transposev_i8xi8xi32
         , @match_conv_2d_nhwc_hwcf_36x64x64_1280_3x3x1280_ -> @apply_op_config
         , @match_conv_2d_nhwc_hwcf_36x32x32_1280_3x3x1280_ -> @apply_op_config
         , @match_conv_2d_nhwc_hwcf_36x32x32_1280_3x3x2560_ -> @apply_op_config
+
+        //mlperf bs=18, cpd=1 end
 
         //, @match_mmt_8192x640x2560 -> @apply_op_config
 
