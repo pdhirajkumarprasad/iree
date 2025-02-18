@@ -226,7 +226,14 @@ transform.named_sequence @match_contraction_147456x640x640_i8xi8xi32(%arg0: !tra
     transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
   }
 
-
+transform.named_sequence @match_conv_2d_nhwc_hwcf_18x512x512_512_3x3x512_(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
+    %inputs, %outputs = transform.iree.match.cast_compatible_dag_from_root %arg0 {
+    ^bb0(%arg1: tensor<18x514x514x512xf16>, %arg2: tensor<3x3x512x512xf16>, %arg3: tensor<18x512x512x512xf32>):
+      %1 = linalg.conv_2d_nhwc_hwcf {dilations = dense<1> : vector<2xi64>, strides = dense<1> : vector<2xi64>} ins(%arg1, %arg2 : tensor<18x514x514x512xf16>, tensor<3x3x512x512xf16>) outs(%arg3 : tensor<18x512x512x512xf32>) -> tensor<18x512x512x512xf32>
+    } : (!transform.any_op) -> (!transform.any_value, !transform.any_value) 
+    %0 = transform.param.constant #iree_codegen.compilation_info<lowering_config = #iree_gpu.lowering_config<{mma_kind = #iree_gpu.mma_layout<MFMA_F32_16x16x16_F16>, promote_operands = [0, 1], reduction = [0, 0, 0, 0, 1, 1, 32], subgroup_m_count = 1 : i64, subgroup_n_count = 8 : i64, workgroup = [1, 8, 16, 512, 0, 0, 0]}>, translation_info = <pipeline = LLVMGPUVectorDistribute workgroup_size = [512, 1, 1] subgroup_size = 64, {gpu_pipeline_options = #iree_gpu.pipeline_options<prefetch_shared_memory = true>, llvm_func_attrs = {"amdgpu-waves-per-eu" = "2"}}>> -> !transform.any_param
+    transform.yield %arg0, %0 : !transform.any_op, !transform.any_param
+  }
 
 //conv
 transform.named_sequence @match_conv_2d_nhwc_hwcf_36x64x64_1280_3x3x1280_(%arg0: !transform.any_op {transform.readonly}) -> (!transform.any_op, !transform.any_param) {
@@ -707,6 +714,8 @@ transform.named_sequence @match_matmul_like_Bx20x64x64x2048_transposev_i8xi8xi32
         
         //mlperf bs=18, cpd=1 end
         // Matmul.
+        ,@match_conv_2d_nhwc_hwcf_18x512x512_512_3x3x512_ -> @apply_op_config
+
         , @match_mmt_2048x10240x1280 -> @apply_op_config
         , @match_mmt_2048x1280x5120 -> @apply_op_config
         , @match_mmt_2048x1280x1280 -> @apply_op_config
